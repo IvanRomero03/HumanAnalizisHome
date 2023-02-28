@@ -1,5 +1,5 @@
 import cv2
-from deepface import DeepFace
+from deepface.deepface import DeepFace
 from matplotlib import pyplot as plt
 import numpy as np
 

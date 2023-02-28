@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import os
-from deepface import DeepFace
+from deepface.deepface import DeepFace
 from typing import TypedDict, List
 from util_types.detection import DetectionResult, Facial_area
 from util_types.recognition import FaceRecognitionRow
