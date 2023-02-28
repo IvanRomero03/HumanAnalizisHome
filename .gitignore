@@ -1,1 +1,6 @@
-venv/
+venv/*
+!venv/Lib/
+venv/Lib/site-packages/*
+!venv/Lib/site-packages/deepface/
+venv/Lib/site-packages/deepface/*
+!venv/Lib/site-packages/deepface/DeepFace.py
