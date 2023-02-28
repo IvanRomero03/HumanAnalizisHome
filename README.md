@@ -1,5 +1,5 @@
 # @HOME Human Analizer Module
-git pull --recurse-submodules
+git clone  --recurse-submodules
 
 # Create a new virtual environment if not exists
 python3 -m venv venv
