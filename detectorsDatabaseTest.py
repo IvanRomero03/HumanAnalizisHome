@@ -22,12 +22,13 @@ for backend in detector_backends:
     print(f"Testing {backend} backend")
     tick = time.time()
     #creating database folder
-    if (not os.path.exists(f"{backend}_extracted")):
-            print(f"Had to create {backend}_extracted folder")
-            os.mkdir(f"{backend}_extracted")
+    backend_folder = f"detectorExtracted/{backend}_extracted"
+    if (not os.path.exists(backend_folder)):
+            print(f"Had to create {backend_folder}")
+            os.mkdir(backend_folder)
     else:
-         for file in os.listdir(f"{backend}_extracted"):
-            os.remove(f"{backend}_extracted/{file}")
+         for file in os.listdir(backend_folder):
+            os.remove(f"{backend_folder}/{file}")
 
     for i in range(img_counter):
         db_img = cv2.imread(f"{database_path}/face_{i}.jpg")
@@ -40,7 +41,7 @@ for backend in detector_backends:
             for face_count, face_obj in enumerate(face_objs):
                 face_area = face_obj["facial_area"]
                 face_img = db_img[max(0, face_area["y"]-margin):min(db_img.shape[0], face_area["y"]+face_area["h"]+margin), max(0, face_area["x"]-margin):min(db_img.shape[1], face_area["x"]+face_area["w"]+margin)]
-                cv2.imwrite(f"{backend}_extracted/face_{i}_{face_count}_{backend}.jpg", face_img)
+                cv2.imwrite(f"{backend_folder}/face_{i}_{face_count}_{backend}.jpg", face_img)
         except:
             print(f"Error in {backend} backend with face_{i}.jpg")
             continue
