@@ -1,0 +1,174 @@
+import cv2
+import numpy as np
+import os
+from deepface.deepface import DeepFace
+from typing import TypedDict, List
+from util_types.detection import DetectionResult, Facial_area
+from util_types.recognition import FaceRecognitionRow
+import time
+
+# opencv version
+(major_ver, minor_ver, subminor_ver) = (cv2.__version__).split('.')
+
+# disable gpu
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+# cam 
+cam = cv2.VideoCapture(0)
+
+# set tracking type
+tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+tracker_type = tracker_types[1]
+
+# used to record the time when we processed last frame
+prev_frame_time = 0
+
+# used to record the time at which we processed current frame
+new_frame_time = 0
+
+# num of images in faces folder
+img_counter = len(os.listdir("faces"))
+
+# margin in pxs to add to face area
+margin = 10
+
+trackers = {}
+
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        print("failed to grab frame")
+        break
+    k = cv2.waitKey(1)
+    if k%256 == 27:
+        # ESC pressed
+        print("Escape hit, closing...")
+        break
+    # elif k%256 == 32:
+    #     # SPACE pressed
+    #     img_name = "opencv_frame_{}.png".format(img_counter)
+    #     cv2.imwrite(img_name, frame)
+    #     print("{} written!".format(img_name))
+    #     img_counter += 1
+    
+    # image to numpy array
+    imgFrame = np.asarray(frame)
+
+    # detect faces
+    try:
+        faces_results: List[DetectionResult] = DeepFace.extract_faces(imgFrame, detector_backend = 'ssd')
+    except:
+        print("no faces detected")
+        continue
+    
+    # dict_keys(['face', 'facial_area', 'confidence'])
+    faces = []
+    bboxes = []
+    xy_list = []
+    for face in faces_results:
+        face_area = face["facial_area"]
+        face_img = imgFrame[max(0, face_area["y"]-margin):min(imgFrame.shape[0], face_area["y"]+face_area["h"]+margin), max(0, face_area["x"]-margin):min(imgFrame.shape[1], face_area["x"]+face_area["w"]+margin)]
+        faces.append(face_img)
+        xy_list.append((face_area["x"], face_area["y"]))
+        bbox = (max(0, face_area["x"]-margin), max(0, face_area["y"]-margin), face_area["w"]+margin, face_area["h"]+margin)
+        bboxes.append(bbox)
+        cv2.rectangle(frame, (max(0, face_area["x"]-margin), max(0, face_area["y"]-margin)), (min(imgFrame.shape[1], face_area["x"]+face_area["w"]+margin), min(imgFrame.shape[0], face_area["y"]+face_area["h"]+margin)), (0, 255, 0), 2)
+
+    repeated_faces = []
+    new_faces = []
+
+    # font which we will be using to display FPS
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # time when we finish processing for this frame
+    new_frame_time = time.time()
+
+    # Calculating the fps
+  
+    # fps will be number of frame processed in given time frame
+    # since their will be most of time error of 0.001 second
+    # we will be subtracting it to get more accurate result
+    fps = 1/(new_frame_time-prev_frame_time)
+    prev_frame_time = new_frame_time
+  
+    # converting the fps into integer
+    fps = int(fps)
+  
+    # converting the fps to string so that we can display it on frame
+    # by using putText function
+    fps = str(fps) + ' fps'
+  
+    # putting the FPS count on the frame
+    cv2.putText(frame, fps, (7, 70), font, 1, (100, 255, 0), 3, cv2.LINE_AA)
+
+    if(len(faces) > 0):
+        print("faces detected")
+
+        #Updating trackers
+        tracker_bboxes = []
+        trackers_to_delete = []
+        for tracker_id in trackers:
+            print(f"checking tracker with id {tracker_id}")
+            ok, bbox = trackers[tracker_id].update(frame)
+            tracker_bboxes.append(bbox)
+            if ok:
+                # Tracking success
+                p1 = (int(bbox[0]), int(bbox[1]))
+                p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+                cv2.rectangle(frame, p1, p2, (255,255,0), 2, 1)
+            else :
+                # Tracking failure
+                cv2.putText(frame, "Tracking failure detected", (100,80), font, 0.75,(0,0,255),2)
+                # Deleting tracker
+                trackers_to_delete.append(tracker_id)
+        # Deleting lost trackers
+        for tracker_id in trackers_to_delete:
+            del trackers[tracker_id]
+
+        for face in zip(xy_list, faces, bboxes):
+            face_tracked = False
+            #checking if face detected is being tracked
+            for tracker_bbox in tracker_bboxes:
+                margin_w = tracker_bbox[2] * 0.3
+                margin_h = tracker_bbox[3] * 0.3
+                tracker_x = tracker_bbox[0]
+                tracker_y = tracker_bbox[1]
+                tracker_w = tracker_bbox[2]
+                tracker_h = tracker_bbox[3]
+                face_x = face[2][0]
+                face_y = face[2][1]
+                face_w = face[2][2]
+                face_h = face[2][3]
+                if ((tracker_x - margin_w < face_x < tracker_x + margin_w) and 
+                    (tracker_y - margin_h < face_y < tracker_y + margin_h)):
+                    face_tracked = True
+                    face_id = tracker_id
+                    cv2.putText(frame, face_id, (face[0][0], face[0][1]), font, 1, (100, 255, 0), 1, cv2.LINE_AA)
+                
+
+            if not face_tracked:
+                find_result:List[FaceRecognitionRow] = DeepFace.find(face[1], db_path = "faces", enforce_detection=False)[0]
+                if(len(find_result) > 0):
+                    print("face found")
+                    #print(find_result)
+                    print(face[0])
+                    face_id = find_result['identity'][0]
+                    if face_id not in trackers:
+                        #Creating tracker for face with identity face_id
+                        print("adding tracker")
+                        trackers[face_id] = cv2.TrackerKCF_create()
+                        tracker_bbox = face[2]
+                        ok = trackers[face_id].init(frame, tracker_bbox)
+                        print(f"init tracker with id {face_id}")
+                    cv2.putText(frame, face_id, (face[0][0], face[0][1]), font, 1, (100, 255, 0), 1, cv2.LINE_AA)
+                    print("text added to frame")
+                else:
+                    print("face not found")
+                    # save face to database
+                    cv2.imwrite("faces/face_{}.jpg".format(img_counter), face[1])
+                    img_counter += 1
+                    # erase .pkl file
+                    os.remove("faces/representations_vgg_face.pkl")
+                    #no find result (get data from face)
+    cv2.imshow("test", frame)
+
+
+cam.release()
