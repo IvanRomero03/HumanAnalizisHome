@@ -4,3 +4,6 @@
 [submodule "humanAnalisis/src/deepface"]
 	path = humanAnalisis/src/deepface
 	url = https://github.com/IvanRomero03/deepface.git
+[submodule "human_vision_ws/src/humanAnalyzer/src/deepface"]
+	path = human_vision_ws/src/humanAnalyzer/src/deepface
+	url = https://github.com/IvanRomero03/deepface.git
