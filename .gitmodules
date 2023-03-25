@@ -1,3 +1,6 @@
 [submodule "deepface"]
 	path = deepface
 	url = https://github.com/IvanRomero03/deepface.git
+[submodule "humanAnalisis/src/deepface"]
+	path = humanAnalisis/src/deepface
+	url = https://github.com/IvanRomero03/deepface.git
