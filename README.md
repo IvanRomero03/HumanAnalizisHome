@@ -17,3 +17,8 @@ pip install -r requirements.txt
 # Deactivate the virtual environment
 source venv/bin/deactivate
 // deactivate
+
+# pull a submodule
+git submodule update --init --recursive
+
+🙏🙏🙏🙏
