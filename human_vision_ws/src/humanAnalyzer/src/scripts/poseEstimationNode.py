@@ -7,7 +7,7 @@ import numpy as np
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from pose_detection.msg import pose_positions
+from humanAnalyzer.msg import pose_positions
 from geometry_msgs.msg import Point
 
 # indexToName = ["nose",

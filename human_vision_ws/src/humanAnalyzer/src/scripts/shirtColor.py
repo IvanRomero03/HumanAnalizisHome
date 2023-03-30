@@ -7,7 +7,7 @@ import numpy as np
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from pose_detection.msg import pose_positions
+from humanAnalyzer.msg import pose_positions
 from geometry_msgs.msg import Point
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -97,7 +97,7 @@ class shirtColor:
                             print("hip is in image")
                             cut_y_down = int(self.received_pose.hipRight.y * img_h)
                         else:
-                            cut_y_down = 0
+                            cut_y_down = int(img_h)
                         cut_x_up = int(max(self.received_pose.shoulderRight.x, self.received_pose.shoulderLeft.x) * img_w)
                         cut_x_down = int(min(self.received_pose.shoulderRight.x, self.received_pose.shoulderLeft.x) * img_w)
 
