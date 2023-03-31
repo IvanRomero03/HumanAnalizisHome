@@ -10,6 +10,7 @@ import time
 cv2.namedWindow("preview")
 vc = cv2.VideoCapture(0)
 
+
 # used to record the time when we processed last frame
 prev_frame_time = 0
   
@@ -30,7 +31,7 @@ while True: # try to get the first frame
 
     # detect faces
     try:
-        faces_results: List[DetectionResult] = DeepFace.extract_faces(imgFrame, detector_backend = 'mtcnn')
+        faces_results: List[DetectionResult] = DeepFace.extract_faces(imgFrame, detector_backend = 'ssd')
     except:
         continue
     

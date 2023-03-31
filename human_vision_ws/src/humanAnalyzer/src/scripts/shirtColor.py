@@ -5,6 +5,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import rospy
+import math
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from humanAnalyzer.msg import pose_positions
@@ -36,6 +37,35 @@ class shirtColor:
     def show_image(img):
         cv2.imshow('image', img)
         cv2.waitKey(1)
+    
+    def classifyColor(self, rgb):
+        r = rgb[0]
+        g = rgb[1]
+        b = rgb[2]
+         #Training data with color names and their RGB values
+        colors = {'red': [255,0,0],
+                'green': [0,255,0],
+                'blue': [0,0,255],
+                'yellow': [255,255,0],
+                'cyan': [0,255,255],
+                'magenta': [255,0,255],
+                'white': [255,255,255],
+                'black': [0,0,0],
+                'gray': [128,128,128],
+                'purple': [128,0,128],
+                'orange': [255,165,0],
+                'pink': [255,192,203],
+                'brown': [165,42,42]}
+
+        min_distance = float('inf')
+        closest_color = None
+        for color, rgb in colors.items():
+            # get the smalles distance from obtained color to the set colors
+            distance = math.sqrt((rgb[0]-r)**2 + (rgb[1]-g)**2 + (rgb[2]-b)**2)
+            if distance < min_distance:
+                min_distance = distance
+                closest_color = color
+        return closest_color
     
     def get_biggest_contour(self, img):
         R,G,B = cv2.split(img)
@@ -122,6 +152,8 @@ class shirtColor:
                         mean_color = tuple(reversed(mean_color))
                         mean_color_rgb = cv2.cvtColor(np.array([[mean_color]], dtype=np.uint8), cv2.COLOR_BGR2RGB)[0][0]
                         print('Mean color of image foreground:', mean_color_rgb)
+                        shirtColorstr = self.classifyColor(mean_color_rgb)
+                        print('Shirt color is:', shirtColorstr)
 
                         color_rect = np.zeros((100, 100, 3), dtype=np.uint8)
                         color_rect[:, :] = mean_color_rgb
