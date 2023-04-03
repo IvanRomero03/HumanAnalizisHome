@@ -53,7 +53,9 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   pose_point.msg
+  pose_array.msg
   pose_positions.msg
+  pose_estimations.msg
 )
 
 ## Generate services in the 'srv' folder
