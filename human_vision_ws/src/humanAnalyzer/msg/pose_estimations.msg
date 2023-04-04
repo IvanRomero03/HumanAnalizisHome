@@ -1,1 +1,1 @@
-PoseArray[] people_estimations
+pose_array[] people_estimations
