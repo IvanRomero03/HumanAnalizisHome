@@ -56,14 +56,16 @@ add_message_files(
   pose_array.msg
   pose_positions.msg
   pose_estimations.msg
+  face_array.msg
+  face.msg
+  face_info.msg
 )
 
-## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+# Generate services in the 'srv' folder
+add_service_files(
+  FILES
+  faces_info.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(

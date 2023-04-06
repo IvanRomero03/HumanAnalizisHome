@@ -4,6 +4,10 @@ from typing import Tuple
 import cv2
 import mediapipe as mp
 import numpy as np
+from scipy.spatial import KDTree
+from webcolors import CSS3_HEX_TO_NAMES as css3_hex_to_names
+from webcolors import hex_to_rgb
+import pandas as pd
 import rospy
 import math
 from cv_bridge import CvBridge
@@ -38,10 +42,10 @@ class shirtColor:
         cv2.imshow('image', img)
         cv2.waitKey(1)
     
-    def classifyColor(self, rgb):
-        r = rgb[0]
+    def classifyColor_rgb(self, rgb):
+        r = rgb[2]
         g = rgb[1]
-        b = rgb[2]
+        b = rgb[0]
          #Training data with color names and their RGB values
         colors = {'red': [255,0,0],
                 'green': [0,255,0],
@@ -51,7 +55,6 @@ class shirtColor:
                 'magenta': [255,0,255],
                 'white': [255,255,255],
                 'black': [0,0,0],
-                'gray': [128,128,128],
                 'purple': [128,0,128],
                 'orange': [255,165,0],
                 'pink': [255,192,203],
@@ -66,6 +69,37 @@ class shirtColor:
                 min_distance = distance
                 closest_color = color
         return closest_color
+
+    def classifyColor_hsv(self, hsv):
+        hue = hsv[0]
+        saturation = hsv[1]
+        value = hsv[2]
+        if (value < 40 and saturation <40):  return "Black";
+        if (value > 210 and saturation >210):  return "White";
+
+        if (saturation < 50): return "Gray";
+
+        if (hue < 30):   return "Red";
+        if (hue < 90):   return "Magenta";
+        if (hue < 150):  return "Blue";
+        if (hue < 210):  return "Cyan";
+        if (hue < 270):  return "Green";
+        if (hue < 330):  return "Yellow";
+        return "Red";
+
+    def classifyColor_web(self, rgb_tuple):
+    
+        # a dictionary of all the hex and their respective names in css3
+        css3_db = css3_hex_to_names
+        names = []
+        rgb_values = []
+        for color_hex, color_name in css3_db.items():
+            names.append(color_name)
+            rgb_values.append(hex_to_rgb(color_hex))
+        
+        kdt_db = KDTree(rgb_values)
+        distance, index = kdt_db.query(rgb_tuple)
+        return names[index]
     
     def get_biggest_contour(self, img):
         R,G,B = cv2.split(img)
@@ -150,13 +184,25 @@ class shirtColor:
                         #get mean color
                         mean_color = cv2.mean(chestImg)[:3]
                         mean_color = tuple(reversed(mean_color))
-                        mean_color_rgb = cv2.cvtColor(np.array([[mean_color]], dtype=np.uint8), cv2.COLOR_BGR2RGB)[0][0]
+                        mean_color_rgb = [int(i) for i in mean_color]
                         print('Mean color of image foreground:', mean_color_rgb)
-                        shirtColorstr = self.classifyColor(mean_color_rgb)
-                        print('Shirt color is:', shirtColorstr)
+                        shirtColorrgb = self.classifyColor_rgb(mean_color_rgb)
+                        print('Shirt color (rgb) is:', shirtColorrgb)
+
+                        #with hsv
+                        color_to_hsv = np.uint8([[[mean_color_rgb[0], mean_color_rgb[1], mean_color_rgb[2]]]])
+                        mean_color_hsv_conv = cv2.cvtColor(color_to_hsv, cv2.COLOR_RGB2HSV)
+                        mean_color_hsv = mean_color_hsv_conv[0][0]
+                        print('HSV color of image foreground:', mean_color_hsv)
+                        shirtColorhsv = self.classifyColor_hsv(mean_color_hsv)
+                        print("Shirt color (hsv) is ", shirtColorhsv)
+
+                        shirtColorweb = self.classifyColor_web(mean_color_rgb)
+                        print('Shirt color (webcolors) is:', shirtColorweb)
+
 
                         color_rect = np.zeros((100, 100, 3), dtype=np.uint8)
-                        color_rect[:, :] = mean_color_rgb
+                        color_rect[:, :] = cv2.cvtColor(np.uint8([[mean_color_rgb]]), cv2.COLOR_RGB2BGR)[0][0]
                         cv2.namedWindow('Color')
                         cv2.imshow('Color', color_rect)
 
