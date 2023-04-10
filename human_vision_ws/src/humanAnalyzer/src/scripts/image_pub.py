@@ -8,12 +8,11 @@ import os
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 
-def start_node(filename):
+def start_node():
     rospy.init_node('image_pub')
     rospy.loginfo('image_pub node started')
     cap = cv2.VideoCapture(0)
     success, img = cap.read()
-    #img = cv2.imread(filename); success = True
     bridge = CvBridge()
     imgMsg = bridge.cv2_to_imgmsg(img, "rgb8")
     pub = rospy.Publisher('image', Image, queue_size=10)
@@ -27,6 +26,6 @@ def start_node(filename):
             rospy.Rate(60.0).sleep()
 if __name__ == '__main__':
     try:
-        start_node("src/images/test1.jpg")
+        start_node()
     except rospy.ROSInterruptException:
         pass

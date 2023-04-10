@@ -2,3 +2,4 @@ venv/
 detectorTest_db/
 human_vision_ws/build/
 human_vision_ws/devel/
+*.pyc
