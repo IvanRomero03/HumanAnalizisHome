@@ -65,6 +65,7 @@ add_message_files(
 add_service_files(
   FILES
   faces_info.srv
+  imagetoAnalyze.srv
 )
 
 ## Generate actions in the 'action' folder

@@ -4,7 +4,6 @@ import rospkg
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
-import cv2
 import numpy as np
 import os
 from time import sleep
@@ -14,12 +13,18 @@ from util_types.detection import DetectionResult, Facial_area
 from util_types.recognition import FaceRecognitionRow
 from humanAnalyzer.msg import pose_positions
 from humanAnalyzer.msg import face, face_array
+from humanAnalyzer.srv import imagetoAnalyze, imagetoAnalyzeResponse
+from std_msgs.msg import Bool
 from deepface.deepface import DeepFace 
 import time
+import tensorflow as tf
 import json
 
 # disable gpu
-os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+# os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+
+# Toggle to run Deepface on GPU or CPU
+useGPU = False
 
 class faceRecognition:
     def __init__(self):
@@ -44,10 +49,17 @@ class faceRecognition:
 
         self.imageSub = rospy.Subscriber(
             'image', Image, self.process_image, queue_size=10)
+        self.faceAnalysisStateSub = rospy.Subscriber(
+            'faceAnalysisState', Bool, self.faceAnalysisListener, queue_size=1
+        )
+        self.faceAnalysisState = True # busy by default to avoid calling unactive service
         self.facePub = rospy.Publisher(
             'faces', face_array, queue_size=10
         )
 
+    def faceAnalysisListener(self, msg):
+        self.faceAnalysisState = msg.data
+    
     def process_image(self, msg):
         try:
             self.received_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
@@ -64,7 +76,7 @@ class faceRecognition:
         imgFrame = np.asarray(frame)
         margin = self.margin
         try:
-            faces_results: List[DetectionResult] = DeepFace.extract_faces(imgFrame, detector_backend = 'ssd')
+            faces_results: List[DetectionResult] = DeepFace.extract_faces(imgFrame, detector_backend = detector_backend)
         except:
             print("No faces detected")
             return None, None, None
@@ -117,7 +129,7 @@ class faceRecognition:
         face_tracked = False
         prev_detections = self.prev_detections
         for prev_detection in prev_detections:
-            print(f"checking prev detection: {prev_detection}")
+            #print(f"checking prev detection: {prev_detection}")
             face_id = prev_detection
             prev_detection_bbox = prev_detections[prev_detection]
             margin_w = prev_detection_bbox[2] * 0.3
@@ -136,13 +148,12 @@ class faceRecognition:
                 cv2.putText(frame, face_id, (face[0][0], face[0][1]), self.font, self.fontsize, (100, 255, 0), 1, cv2.LINE_AA)
                 # updating tracker
                 prev_detections[prev_detection] = face[2]
-                print(f"appending {face_id} to faces tracked")
+                #print(f"appending {face_id} to faces tracked")
                 self.faces_tracked.append(face_id)
                 face_tracked = True
-                break
-
-
-        return face_tracked
+                # return face_id to know which face 
+                return face_tracked, face_id
+        return face_tracked, None
     
     def findFace(self, face, frame):
         if self.img_counter > 0:
@@ -162,8 +173,21 @@ class faceRecognition:
                     self.faces_tracked.append(face_id)
                     print(self.prev_detections)
                     print(f"init tracker with id {face_id}")
-
-                #getting attributes and writing to json
+                
+                # If attributes are generated on external service
+                data = {}
+                try:
+                    f = open(self.json_path)
+                    data = json.load(f)
+                except:
+                    print("Creating json file")
+                if face_id not in data:
+                    data[face_id] = {}
+                    with open(self.json_path, 'w') as outfile:
+                        json.dump(data, outfile)
+                
+                # Only if attributes generated on this script
+                '''#getting attributes and writing to json
                 #load json
                 data = {}
                 try:
@@ -193,22 +217,81 @@ class faceRecognition:
                         del self.prev_detections[face_id]
                         self.faces_tracked.remove(face_id)
                 else:
-                    print("face already in json")
+                    print("face already in json")'''
                 cv2.putText(frame, face_id, (face[0][0], face[0][1]), self.font, self.fontsize, (100, 255, 0), 1, cv2.LINE_AA)
                 print("text added to frame")
             else:
                 print("face not found")
                 # save face to database
+                face_id = f"face_{self.img_counter}"
                 cv2.imwrite(f"{self.faces_path}/face_{self.img_counter}.jpg", face[1])
                 self.img_counter += 1
                 # erase .pkl file
                 os.remove(self.representations_path)
+
+                #---Tracking on first recognition
                 #no find result (get data from face)
+                if face_id not in self.prev_detections:
+                    #Creating tracker for face with identity face_id
+                    print("adding tracker")
+                    self.prev_detections[face_id] = face[2]
+                    self.faces_tracked.append(face_id)
+                    print(self.prev_detections)
+                    print(f"init tracker with id {face_id}")
+                
+                # If attributes are generated on external service
+                data = {}
+                try:
+                    f = open(self.json_path)
+                    data = json.load(f)
+                except:
+                    print("Creating json file")
+                if face_id not in data:
+                    data[face_id] = {}
+                    with open(self.json_path, 'w') as outfile:
+                        json.dump(data, outfile)
+                
+                cv2.putText(frame, face_id, (face[0][0], face[0][1]), self.font, self.fontsize, (100, 255, 0), 1, cv2.LINE_AA)
+                print("text added to frame")
+
         else:
             print("no faces in path")
             # save face to database
             cv2.imwrite(f"{self.faces_path}/face_{self.img_counter}.jpg", face[1])
             self.img_counter += 1
+    
+    def checkAttributes(self, face_id, bbox):
+        #load json
+        data = {}
+        try:
+            f = open(self.json_path)
+            data = json.load(f)
+        except:
+            print("No json file")
+            return
+        
+        if face_id in data:
+            #print("Face in json")
+            if "age" not in data[face_id]:
+                if not self.faceAnalysisState:
+                    try:
+                        callSrv = rospy.ServiceProxy("faceAnalysisSrv", imagetoAnalyze)
+                        print("calling service")
+                        facetoAnalyze = face()
+                        facetoAnalyze.identity = face_id
+                        facetoAnalyze.x = bbox[0]
+                        facetoAnalyze.y = bbox[1]
+                        facetoAnalyze.w = bbox[2]
+                        facetoAnalyze.h = bbox[3]
+                        callSrv(facetoAnalyze)
+                        print("call ended")
+                    except rospy.ServiceException as e:
+                        print("Service call failed: %s"%e)
+                else:
+                    print("Face analysis service is busy")
+        else:
+            print("face not in json")
+            return
 
     def publishFaces(self):
         faces_publish = []
@@ -223,7 +306,7 @@ class faceRecognition:
                 face_publish.w = bbox[2]
                 face_publish.h = bbox[3]
                 faces_publish.append(face_publish)
-            print(f"published {faces_publish}")
+            #print(f"Published {faces_publish}")
             self.facePub.publish(faces_publish)
 
     def run(self):
@@ -243,9 +326,11 @@ class faceRecognition:
                 if(len(faces) > 0):
                     for face in zip(xy_lists, faces, bboxes):
                         # Check if face is being tracked, if not, run recognition
-                        face_tracked = self.check_prev_detections(frame, face)
+                        face_tracked, face_tracked_id = self.check_prev_detections(frame, face)
                         if not face_tracked:
                             self.findFace(face, frame)
+                        else:
+                            self.checkAttributes(face_tracked_id, face[2])
                 else:
                     # if no faces, empty faces tracked list
                     self.faces_tracked = []
@@ -253,7 +338,7 @@ class faceRecognition:
                 for prev_detection in self.prev_detections:
                     if prev_detection not in self.faces_tracked:
                         #deleting tracker
-                        print(f"deleting tracker with id {prev_detection}")
+                        #print(f"Deleting tracker with id {prev_detection}")
                         del self.prev_detections[prev_detection]
                         break
                         
@@ -266,5 +351,10 @@ class faceRecognition:
                 print("Waiting for image")
                 sleep(1)
                 continue
+        print("Shutting down...")
 
-faceRecognition().run()
+if useGPU:
+    faceRecognition().run()
+else:
+    with tf.device('/cpu:0'):
+        faceRecognition().run()

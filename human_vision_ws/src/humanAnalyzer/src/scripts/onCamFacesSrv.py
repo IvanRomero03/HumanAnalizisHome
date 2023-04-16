@@ -23,11 +23,6 @@ class onCamFacesSrv:
     
     def printReceived(self):
         print(self.facesmsg)
-
-    def run(self):
-        while not rospy.is_shutdown():
-            self.printReceived()
-            rospy.Rate(2.0).sleep()
     
     #-----------SERVER---------------------------------
     def handle_request(self, req):
