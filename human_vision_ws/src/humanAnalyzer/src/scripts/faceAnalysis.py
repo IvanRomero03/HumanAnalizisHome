@@ -74,8 +74,8 @@ class faceAnalysis:
             face_h = self.req.imagetoAnalyze.h
             faceimg = self.received_image[face_y:face_y+face_h, face_x:face_x+face_w]
             #show faceimg in plt
-            plt.imshow(cv2.cvtColor(faceimg, cv2.COLOR_BGR2RGB))
-            plt.show()
+            #plt.imshow(cv2.cvtColor(faceimg, cv2.COLOR_BGR2RGB))
+            #plt.show()
             data = {}
             try:
                 f = open(self.json_path)
