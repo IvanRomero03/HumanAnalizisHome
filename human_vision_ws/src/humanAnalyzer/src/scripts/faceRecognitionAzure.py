@@ -35,7 +35,7 @@ useGPU = False
 
 # Toggle to delete Azure Face List
 deleteAzureListonStart = False
-deleteAzureListonStop = True
+deleteAzureListonStop = False
 
 class AzureFaceList:
     def __init__(self, face_list_id, azure_key, azure_endpoint):
@@ -130,10 +130,12 @@ class faceRecognition:
         self.received_image = None
         self.bridge = CvBridge()
 
-        rospy.init_node('PoseDetector')
+        rospy.init_node('FaceRecognition')
 
+        camSubscriber = '/zed2/zed_node/right/image_rect_color'
+        #camSubscriber = 'image'
         self.imageSub = rospy.Subscriber(
-            'image', Image, self.process_image, queue_size=10)
+            camSubscriber, Image, self.process_image, queue_size=10)
         self.faceAnalysisStateSub = rospy.Subscriber(
             'faceAnalysisState', Bool, self.faceAnalysisListener, queue_size=1
         )
@@ -142,12 +144,20 @@ class faceRecognition:
             'faces', face_array, queue_size=10
         )
 
+        #Checking if Azure facelist is empty
+        facelistsize = len(self.azureFaceList.face_client.face_list.get(self.face_list_id).persisted_faces)
+        if facelistsize > 0:
+            self.faceListEmpty = False
+        else:
+            self.faceListEmpty = True
+
     def faceAnalysisListener(self, msg):
         self.faceAnalysisState = msg.data
     
     def process_image(self, msg):
         try:
             self.received_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
+            self.received_image = cv2.cvtColor(self.received_image, cv2.COLOR_BGR2RGB)
         except Exception as e:
             print("Image not received")
             print(e)
@@ -274,8 +284,8 @@ class faceRecognition:
         print("Verifying face on azure...")
         time.sleep(0.2) #Wait for the face to appear on url
         verify_result = None
-        facelistsize = len(self.azureFaceList.face_client.face_list.get(self.face_list_id).persisted_faces)
-        if facelistsize > 0:
+        
+        if not self.faceListEmpty:
             try:
                 verify_result = self.azureFaceList.verifyFaceFromUrl(supabase_url)
             except:
@@ -313,6 +323,7 @@ class faceRecognition:
             print("Face not found on azure")
             face_id = self.azureFaceList.addFace(supabase_url)
             print(f"Face added to azure with id {face_id}")
+            self.faceListEmpty = False
 
             # Adding Tracker
             if face_id not in self.prev_detections:
@@ -458,12 +469,22 @@ class faceRecognition:
                     # if no faces, empty faces tracked list
                     self.faces_tracked = []
                 
+                # Delete trackers that are not in frame
+                detections_to_delete = []
+                detections_to_preserve = []
                 for prev_detection in self.prev_detections:
                     if prev_detection not in self.faces_tracked:
                         #deleting tracker
                         #print(f"Deleting tracker with id {prev_detection}")
-                        del self.prev_detections[prev_detection]
-                        break
+                        detections_to_delete.append(prev_detection)
+                        #break
+                    else:
+                        detections_to_preserve.append(prev_detection)
+                
+                #self.prev_detections = detections_to_preserve
+
+                for detection_to_delete in detections_to_delete:
+                    del self.prev_detections[detection_to_delete]
                         
                 self.show_fps(frame)
                 self.publishFaces()
