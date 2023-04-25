@@ -15,21 +15,7 @@ from std_msgs.msg import Int32
 
 
 PublisherPoints = [
-    {"name": "shoulderLeft", "index": 11},
-    {"name": "shoulderRight", "index": 12},
-    {"name": "elbowLeft", "index": 13},
-    {"name": "elbowRight", "index": 14},
-    {"name": "wristLeft", "index": 15},
-    {"name": "wristRight", "index": 16},
-    {"name": "pinkyLeft", "index": 17},
-    {"name": "pinkyRight", "index": 18},
-    {"name": "indexLeft", "index": 19},
-    {"name": "indexRight", "index": 20},
-    {"name": "thumbLeft", "index": 21},
-    {"name": "thumbRight", "index": 22},
-    {"name": "hipLeft", "index": 23},
-    {"name": "hipRight", "index": 24},
-    # {"name": "chest", "index": 33},
+    {"name": "shoulderLeft", "index": 11}, {"name": "shoulderRight", "index": 12}, {"name": "elbowLeft", "index": 13}, {"name": "elbowRight", "index": 14}, {"name": "wristLeft", "index": 15},  {"name": "wristRight", "index": 16}, {"name": "pinkyLeft", "index": 17}, {"name": "pinkyRight", "index": 18}, {"name": "indexLeft", "index": 19}, {"name": "indexRight", "index": 20}, {"name": "thumbLeft", "index": 21},{"name": "thumbRight", "index": 22}, {"name": "hipLeft", "index": 23}, {"name": "hipRight", "index": 24}, # {"name": "chest", "index": 33},
 ]
 
 
@@ -65,7 +51,7 @@ class PoseDetector:
                         self.imageReceved, "rgb8")
                     image.flags.writeable = False
                     results = pose.process(image)
-
+                    
                     if results.pose_landmarks:
                         x = (
                             results.pose_landmarks.landmark[12].x + results.pose_landmarks.landmark[11].x) / 2
@@ -96,27 +82,52 @@ class PoseDetector:
                         right_shoulder = results.pose_landmarks.landmark[12]
                         left_index = results.pose_landmarks.landmark[19]
                         right_index = results.pose_landmarks.landmark[20]
+                        h = image.shape[0]
+                        w = image.shape[1]
 
-                        if left_index.x < left_shoulder.x and right_index.x < right_shoulder.x:
+                        m = 0.1
+
+                        right_out = right_index.x*w < right_shoulder.x*w - m*w 
+                        left_out = left_index.x*w > left_shoulder.x*w + m*w
+
+                        if right_out and left_out :
+                            pointing.data = 2
+                        elif right_out:
                             pointing.data = 0
-                        elif left_index.x > left_shoulder.x and right_index.x > right_shoulder.x:
+                        elif left_out:
                             pointing.data = 1
                         else:
                             pointing.data = 2
-                        
-                        self.pointingPub.publish(pointing)
-
-                        cv2.imshow('MediaPipe Pose', image)
-                        # draw rect from left_shoulder.x, left_shoulder.y to right_shoulder.x, image.height 
-                        h = image.shape[0]
                         if pointing.data == 0:
                             color = (0, 0, 255)
                         elif pointing.data == 1:
-                            color = (255, 0, 0)
-                        else:
                             color = (0, 255, 0)
-                        cv2.rectangle(image, (left_shoulder.x, left_shoulder.y), (right_shoulder.x, h), color, 2)
+                        else:
+                            color = (255, 0, 0)
+                        
+                        self.pointingPub.publish(pointing)
+
+                        # VERBOSE
+                        image = cv2.circle(image, (int(left_shoulder.x*w), int(left_shoulder.y*h)), 5, (0, 0, 255), -1)
+                        image = cv2.putText(image, "left_shoulder", (int(left_shoulder.x*w), int(left_shoulder.y*h)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                        image = cv2.circle(image, (int(right_shoulder.x*w), int(right_shoulder.y*h)), 5, (0, 0, 255), -1)
+                        image = cv2.putText(image, "right_shoulder", (int(right_shoulder.x*w), int(right_shoulder.y*h)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                        image = cv2.circle(image, (int(left_index.x*w), int(left_index.y*h)), 5, (0, 0, 255), -1)
+                        image = cv2.putText(image, "left_index", (int(left_index.x*w), int(left_index.y*h)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                        image = cv2.circle(image, (int(right_index.x*w), int(right_index.y*h)), 5, (0, 0, 255), -1)
+                        image = cv2.putText(image, "right_index", (int(right_index.x*w), int(right_index.y*h)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                        image = cv2.rectangle(image, (int(left_shoulder.x*w + m*w), 0), (int(right_shoulder.x*w - m*w), h), color, 3)
                         cv2.imshow('MediaPipe Pose', image)
+                        # # draw rect from left_shoulder.x, left_shoulder.y to right_shoulder.x, image.height 
+                        # h = image.shape[0]
+                        # if pointing.data == 0:
+                        #     color = (0, 0, 255)
+                        # elif pointing.data == 1:
+                        #     color = (255, 0, 0)
+                        # else:
+                        #     color = (0, 255, 0)
+                        # # cv2.rectangle(image, (left_shoulder.x, left_shoulder.y), (right_shoulder.x, h), color, 2)
+                        # # cv2.imshow('MediaPipe Pose', image)
                         if cv2.waitKey(1) & 0xFF == 27:
                             break
                 else:
