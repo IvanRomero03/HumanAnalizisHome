@@ -9,40 +9,9 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from humanAnalyzer.msg import pose_positions
 from geometry_msgs.msg import Point
+from std_msgs.msg import Int32
 
-# indexToName = ["nose",
-#                "leftEyeInner",
-#                "leftEye",
-#                "leftEyeOuter",
-#                "rightEyeInner",
-#                "rightEye",
-#                "rightEyeOuter",
-#                "leftEar",
-#                "rightEar",
-#                "mouthLeft",
-#                "mouthRight",
-#                "leftShoulder",
-#                "rightShoulder",
-#                "leftElbow",
-#                "rightElbow",
-#                "leftWrist",
-#                "rightWrist",
-#                "leftPinky",
-#                "rightPinky",
-#                "leftIndex",
-#                "rightIndex",
-#                "leftThumb",
-#                "rightThumb",
-#                "leftHip",
-#                "rightHip",
-#                "leftKnee",
-#                "rightKnee",
-#                "leftAnkle",
-#                "rightAnkle",
-#                "leftHeel",
-#                "rightHeel",
-#                "leftFootIndex",
-#                "rightFootIndex"]
+# indexToName = ["nose", "leftEyeInner", "leftEye", "leftEyeOuter", "rightEyeInner", "rightEye", "rightEyeOuter", "leftEar", "rightEar", "mouthLeft", "mouthRight", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist", "leftPinky", "rightPinky", "leftIndex", "rightIndex", "leftThumb", "rightThumb", "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle", "leftHeel", "rightHeel", "leftFootIndex", "rightFootIndex"]
 
 
 PublisherPoints = [
@@ -79,6 +48,9 @@ class PoseDetector:
 
         self.posePub = rospy.Publisher(
             "pose", pose_positions, queue_size=10)
+
+        self.pointingPub = rospy.Publisher(
+            "pointing", Int32, queue_size=10)
 
     def image_callback(self, data):
         self.imageReceved = data
@@ -117,7 +89,36 @@ class PoseDetector:
 
                         posePublish.chest = point
                         self.posePub.publish(posePublish)
-                        sleep(0.1)
+
+                        pointing = Int32()
+
+                        left_shoulder = results.pose_landmarks.landmark[11]
+                        right_shoulder = results.pose_landmarks.landmark[12]
+                        left_index = results.pose_landmarks.landmark[19]
+                        right_index = results.pose_landmarks.landmark[20]
+
+                        if left_index.x < left_shoulder.x and right_index.x < right_shoulder.x:
+                            pointing.data = 0
+                        elif left_index.x > left_shoulder.x and right_index.x > right_shoulder.x:
+                            pointing.data = 1
+                        else:
+                            pointing.data = 2
+                        
+                        self.pointingPub.publish(pointing)
+
+                        cv2.imshow('MediaPipe Pose', image)
+                        # draw rect from left_shoulder.x, left_shoulder.y to right_shoulder.x, image.height 
+                        h = image.shape[0]
+                        if pointing.data == 0:
+                            color = (0, 0, 255)
+                        elif pointing.data == 1:
+                            color = (255, 0, 0)
+                        else:
+                            color = (0, 255, 0)
+                        cv2.rectangle(image, (left_shoulder.x, left_shoulder.y), (right_shoulder.x, h), color, 2)
+                        cv2.imshow('MediaPipe Pose', image)
+                        if cv2.waitKey(1) & 0xFF == 27:
+                            break
                 else:
                     print("Image not received")
                 rospy.Rate(30).sleep()
