@@ -4,6 +4,8 @@ from typing import Tuple
 import cv2
 import mediapipe as mp
 import numpy as np
+import rospkg
+import json
 from scipy.spatial import KDTree
 from webcolors import CSS3_HEX_TO_NAMES as css3_hex_to_names
 from webcolors import hex_to_rgb
@@ -13,6 +15,7 @@ import math
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from humanAnalyzer.msg import pose_positions
+from humanAnalyzer.msg import face, face_array, face_info
 from geometry_msgs.msg import Point
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -23,12 +26,26 @@ class shirtColor:
     def __init__(self):
         self.received_image = None
         self.received_pose = None
-        rospy.init_node('pose_viewer')
-        rospy.loginfo('pose received')
+        self.facesmsg = []
+
+                
+        # JSON location
+        rospack = rospkg.RosPack()
+        pkg_path = rospack.get_path('humanAnalyzer')
+        self.json_path = f"{pkg_path}/src/scripts/identities.json"
+
+        rospy.init_node('shirtColor')
+        rospy.loginfo('shirtColor initialized')
         self.bridge = CvBridge()
         rospy.Subscriber('image', Image, self.process_image, queue_size=10)
         rospy.Subscriber('pose', pose_positions, self.process_pose, queue_size=10)
+        self.faceSub = rospy.Subscriber(
+            'faces', face_array, self.faceListener, queue_size=10)
     
+    def faceListener(self, data):
+        self.facesmsg = data.faces
+        print(data)
+
     def process_image(self, msg):
         try:
             self.received_image = self.bridge.imgmsg_to_cv2(msg, "rgb8")
@@ -178,24 +195,13 @@ class shirtColor:
                         chestImg = showimg[cut_y_up:cut_y_down, cut_x_down:cut_x_up]
                         #contourImage = self.get_biggest_contour(chestImg)
                         
-                        cv2.imshow('chestImg', chestImg)
+                        #cv2.imshow('chestImg', chestImg)
                         #cv2.imshow('contourImage', contourImage)
 
                         #get mean color
                         mean_color = cv2.mean(chestImg)[:3]
                         mean_color = tuple(reversed(mean_color))
                         mean_color_rgb = [int(i) for i in mean_color]
-                        print('Mean color of image foreground:', mean_color_rgb)
-                        shirtColorrgb = self.classifyColor_rgb(mean_color_rgb)
-                        print('Shirt color (rgb) is:', shirtColorrgb)
-
-                        #with hsv
-                        color_to_hsv = np.uint8([[[mean_color_rgb[0], mean_color_rgb[1], mean_color_rgb[2]]]])
-                        mean_color_hsv_conv = cv2.cvtColor(color_to_hsv, cv2.COLOR_RGB2HSV)
-                        mean_color_hsv = mean_color_hsv_conv[0][0]
-                        print('HSV color of image foreground:', mean_color_hsv)
-                        shirtColorhsv = self.classifyColor_hsv(mean_color_hsv)
-                        print("Shirt color (hsv) is ", shirtColorhsv)
 
                         shirtColorweb = self.classifyColor_web(mean_color_rgb)
                         print('Shirt color (webcolors) is:', shirtColorweb)
@@ -206,6 +212,31 @@ class shirtColor:
                         cv2.namedWindow('Color')
                         cv2.imshow('Color', color_rect)
 
+                        for facemsg in self.facesmsg:
+                            facex1 = facemsg.x
+                            facex2 = facemsg.x + facemsg.w
+                            chestx = self.received_pose.chest.x * img_w
+                            if (chestx > facex1) and (chestx < facex2):
+                                face_id = facemsg.identity
+                                print(f"chest corresponds to: {face_id}")
+                                data = {}
+                                try:
+                                    f = open(self.json_path)
+                                    data = json.load(f)
+                                except:
+                                    print("No json file")
+                                    return
+                                if face_id in data:
+                                    #print("Face in json")
+                                    if "ShirtColor" not in data[face_id]:
+                                        data[face_id]["ShirtColor"] = shirtColorweb
+                                        print("ShirtColor added to json")
+                                        with open(self.json_path, 'w') as outfile:
+                                            json.dump(data, outfile)
+                                else:
+                                    print("face not in json")
+                                    return
+
 
 
                 except Exception as e:
@@ -213,7 +244,7 @@ class shirtColor:
                     print("Cannot cut image with current view")
 
                 #cv2.imshow('chestImg', chestImg)
-                cv2.imshow('image', showimg)
+                #cv2.imshow('image', showimg)
                 cv2.waitKey(1)
                 
             else:
