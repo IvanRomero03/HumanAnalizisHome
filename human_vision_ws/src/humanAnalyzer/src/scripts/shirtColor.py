@@ -14,8 +14,10 @@ import rospy
 import math
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
 from humanAnalyzer.msg import pose_positions
 from humanAnalyzer.msg import face, face_array, face_info
+from humanAnalyzer.srv import imagetoAnalyze, imagetoAnalyzeResponse
 from geometry_msgs.msg import Point
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -41,10 +43,16 @@ class shirtColor:
         rospy.Subscriber('pose', pose_positions, self.process_pose, queue_size=10)
         self.faceSub = rospy.Subscriber(
             'faces', face_array, self.faceListener, queue_size=10)
+        self.clothingAnalysisState = rospy.Subscriber(
+            'clothingAnalysisState', Bool, self.clothingAnalysisListener, queue_size=1
+        )
+        self.faceAnalysisState = True # busy by default to avoid calling unactive service
     
+    def clothingAnalysisListener(self,msg):
+        self.clothingAnalysisState = msg.data
+        
     def faceListener(self, data):
         self.facesmsg = data.faces
-        print(data)
 
     def process_image(self, msg):
         try:
@@ -233,11 +241,27 @@ class shirtColor:
                                         print("ShirtColor added to json")
                                         with open(self.json_path, 'w') as outfile:
                                             json.dump(data, outfile)
+                                    if "Accesories" not in data[face_id]:
+                                        if not self.clothingAnalysisState:
+                                            try:
+                                                callSrv = rospy.ServiceProxy("clothingAnalysisSrv", imagetoAnalyze)
+                                                print("calling service")
+                                                imageforAnalysis = face()
+                                                imageforAnalysis.identity = face_id
+                                                shoulderx1 = self.received_pose.shoulderRight.x * img_w
+                                                shoulderx2 = self.received_pose.shoulderLeft.x * img_w
+                                                imageforAnalysis.x = int(shoulderx1)
+                                                imageforAnalysis.y = 0
+                                                imageforAnalysis.w = int(shoulderx2)
+                                                imageforAnalysis.h = showimg.shape[0]
+                                                callSrv(imageforAnalysis)
+                                                print("call ended")
+                                            except rospy.ServiceException as e:
+                                                print("Service call failed: %s"%e)
+                                        else:
+                                            print("Face analysis service is busy")
                                 else:
                                     print("face not in json")
-                                    return
-
-
 
                 except Exception as e:
                     print(e)
